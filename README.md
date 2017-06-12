@@ -2,9 +2,9 @@
 Quant strategy for China Futures Market
 
     myStrat/
-    |------ codes
+    |------ codes/
     |------ projects/
-    |--------------- Alpha101
-    |--------------- StatArb
-    |--------------- Data
+    |       |-------- Alpha101
+    |       |-------- StatArb
+    |       |-------- Data
     
