@@ -1,0 +1,73 @@
+# ==============================================================================
+# Ref: "Alpha 101"
+# Alpha#16:
+# -1 * rank{                                            |-------> 3
+#                cov(                                   |
+#                        rank(high), rank(volume),     |---> 1
+#                        5                              |-----> 2
+#                    )                                  |
+#            }                                          |
+
+# 算法
+# 1.
+#
+# 含义
+# 本质上说，是对 close 与 volume 在形态出现背离的时候，进行操作
+# 
+# 关联：
+# Alpha #13
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+## Alpha Name
+alphaName <- 'alpha101_16'
+
+## 需要去除的日期
+truncatedTD <- 5
+# ------------------------------------------------------------------------------
+
+
+
+# ==========: 提取dtX ===============================================================================
+# ------------------------------------------------------------------------------
+# dtX
+# ------------------------------------------------------------------------------ 
+
+# ------------------------------------------------------------------------------
+# 计算 signal
+Cal_Signal1 <- function(x){
+    tempRes <- cbind(x, signal1 = NaN)
+
+    tempDT <- sapply((truncatedTD + 1):nrow(tempRes), function(i){
+        # print(i)
+        tempTradingDay <- tempRes[i,TradingDay]
+        temp <- tempRes[TradingDay < tempTradingDay][(.N - truncatedTD) : .N]
+        temp <- temp[, cov(rankHigh,rankVolume)] %>% as.numeric()
+        return(temp)
+    })
+
+    tempRes[(truncatedTD + 1):nrow(tempRes), signal1 := tempDT]
+    return(tempRes)
+}
+
+if(FALSE){
+    x <- dtX[InstrumentID == 'zn1111']
+#    x[,tsRankRow := rank(rankLow, ties.method = 'max')]
+    temp <- Cal_Signal1(x)
+}
+
+# ------------------------------------------------------------------------------
+dtX <- inSample[, .SD[.N > truncatedTD]
+                , by = 'InstrumentID'] %>%
+        .[,":="(rankHigh  = base::rank(high, ties.method = 'max'),
+                rankVolume = base::rank(volume, ties.method = 'max')
+                )
+          ,by = 'TradingDay'] %>%
+        .[,Cal_Signal1(.SD), by = 'InstrumentID'] %>%
+        .[!is.na(signal1)] %>%
+        .[, signal2 := rank(signal1, ties.method = 'max')
+          , by = 'TradingDay'] %>%
+        .[, mySignal := (signal2 - mean(signal2)) / sd(signal2) * nrow(.SD) 
+          , by = 'TradingDay'] %>%
+        .[!is.na(mySignal)]
+# ==================================================================================================
