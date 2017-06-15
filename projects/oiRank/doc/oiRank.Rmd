@@ -1,0 +1,153 @@
+---
+title: "oiRank"
+author: "William Fang"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r initialization}
+library(DT)
+projectPath <- "/home/william/myCodes/oiRank/"
+```
+
+
+# 提取期货公司持仓数据
+
+```{r warning=FALSE, message=FALSE,fig.align='center',fig.width=15,fig.height=12}
+source(paste0(projectPath,"main.R"))
+```
+
+## 主力合约的 oiRank
+
+```{r warning=FALSE, message=FALSE}
+mainContOI
+```
+
+## 价格数据
+
+```{r warning=FALSE, message=FALSE, fig.align='center',fig.width=11,fig.height=6}
+dt
+
+p <- ggplot(dt, aes(TradingDay,close)) +
+  geom_line(color = 'steelblue')
+ggplotly(p)
+```
+
+```{r warning=FALSE, message=FALSE,fig.align='center',fig.width=15,fig.height=12}
+source("/home/william/myCodes/myFunctions/gMeanPlot.R")
+gMeanPlot(dt, x = 'netAmount', y = 'lead_5d_Rtn'
+  	  ,xgn = 40, ygn = 1, xtype = 'continuous',
+		  title = paste('5-days leading Return vs netAmount',':==>',bkTestingProduct))
+```
+
+
+# 关联上下游上市公司
+
+```{r warning=FALSE, message=TRUE,fig.align='center',fig.width=11,fig.height=6}
+projectPath <- "/home/william/myCodes/oiRank/"
+source(paste0(projectPath,"R/oiRank_AshareCompany.R"))
+ggplotly(p1)
+ggplotly(p2)
+```
+
+# 期货公司持仓变化
+
+```{r warning=FALSE, echo=FALSE,message=TRUE,fig.align='center',fig.width=11,fig.height=6}
+projectPath <- "/home/william/myCodes/oiRank/"
+#-------------------------------------------------------------------------------
+# quantile(0.05,0.95)
+#-------------------------------------------------------------------------------
+source(paste0(projectPath,"R/oiRank_futuresCompany.R"))
+
+#-------------------------------------------------------------------------------
+# 所有的期货公司
+#-------------------------------------------------------------------------------
+tempBrokerID <- longBroker
+print("Correlation of Change in LongPosition and nDay Return")
+DT::datatable(tempBrokerID[order(-corLong_1d,-corLong_5d)]) %>%
+  formatStyle(
+  c('corLong_1d','corLong_5d'),
+  color = styleInterval(0, c('white', 'white')),
+  backgroundColor = styleInterval(0, c('green', 'red'))
+)
+
+#-------------------------------------------------------------------------------
+tempBrokerID <- shortBroker
+print("Correlation of Change in ShortPosition and nDay Return")
+DT::datatable(tempBrokerID[order(-corShort_1d,-corShort_5d)])  %>%
+  formatStyle(
+  c('corShort_1d','corShort_5d'),color = styleInterval(0, c('white', 'white')),
+  backgroundColor = styleInterval(0, c('green', 'red'))
+)
+
+```
+
+
+# 期货公司持仓相对强弱
+
+```{r warning=FALSE, echo=FALSE,message=TRUE,fig.align='center',fig.width=11,fig.height=6}
+################################################################################
+## 相对稳定性
+################################################################################
+# mainContOI[Rank %between% c(1,10)][,unique(BrokerID)]
+
+dt[,.(totalLongPos  = mean(longAmount)/sd(longAmount),
+    totalShortPos = mean(shortAmount)/sd(shortAmount))]
+
+#-------------------------------------------------------------------------------
+cl <- makeCluster(detectCores(), type = 'FORK')
+relLongPos <- parLapply(cl,mainContOI[Rank %between% c(1,10)][ClassID == 'longPos'][,unique(BrokerID)],
+						function(i){
+	temp <- mainContOI[Rank %between% c(1,10)][BrokerID == i][ClassID == 'longPos']
+	tempDT <- temp[,mean(Amount)/sd(Amount)] / dt[,mean(longAmount)/sd(longAmount)]
+	tempRes <- data.table(BrokerID = i,
+						  meanAmount = temp[,mean(Amount)],
+						  relVar   = tempDT)
+	return(tempRes)
+}) %>% rbindlist() %>% .[!is.na(relVar)]
+stopCluster(cl)
+#-------------------------------------------------------------------------------
+relLongPos2 <- relLongPos[relVar <= quantile(relVar,0.98)]
+tempAnotate <- relLongPos[meanAmount >= quantile(meanAmount,0.75)][relVar <= quantile(relVar,0.5)][order(-meanAmount)]
+
+p <- ggplot(relLongPos2, aes(x = relVar, y = meanAmount, label = BrokerID)) + 
+	geom_point(color = 'steelblue', size = 2, alpha = 0.5) + 
+	geom_vline(xintercept = relLongPos2[,quantile(relVar,0.5)], color = 'hotpink', linetype = 'dashed') +
+	geom_hline(yintercept = relLongPos2[,quantile(meanAmount,0.75)], color = 'hotpink', linetype = 'dashed') +
+	annotate("text", x = tempAnotate$relVar, y = tempAnotate$meanAmount,
+		    label = tempAnotate$BrokerID, size = 2.5, color = 'darkorange') +
+	labs(title = 'LongPos')
+ggplotly(p)
+
+
+
+#-------------------------------------------------------------------------------
+cl <- makeCluster(detectCores(), type = 'FORK')
+relShortPos <- parLapply(cl,mainContOI[Rank %between% c(1,10)][ClassID == 'shortPos'][,unique(BrokerID)],
+						function(i){
+	temp <- mainContOI[Rank %between% c(1,10)][BrokerID == i][ClassID == 'shortPos']
+	tempDT <- temp[,mean(Amount)/sd(Amount)] / dt[,mean(shortAmount)/sd(shortAmount)]
+	tempRes <- data.table(BrokerID = i,
+						  meanAmount = temp[,mean(Amount)],
+						  relVar   = tempDT)
+	return(tempRes)
+}) %>% rbindlist() %>% .[!is.na(relVar)]
+stopCluster(cl)
+#-------------------------------------------------------------------------------
+relShortPos2 <- relShortPos[relVar <= quantile(relVar,0.98)]
+tempAnotate <- relShortPos[meanAmount >= quantile(meanAmount,0.75)][relVar <= quantile(relVar,0.5)][order(-meanAmount)]
+
+p <- ggplot(relShortPos2, aes(x = relVar, y = meanAmount, label = BrokerID)) + 
+	geom_point(color = 'steelblue', size = 2, alpha = 0.5) + 
+	geom_vline(xintercept = relShortPos2[,quantile(relVar,0.5)], color = 'hotpink', linetype = 'dashed') +
+	geom_hline(yintercept = relShortPos2[,quantile(meanAmount,0.75)], color = 'hotpink', linetype = 'dashed') +
+	annotate("text", x = tempAnotate$relVar, y = tempAnotate$meanAmount,
+		    label = tempAnotate$BrokerID, size = 2.5, color = 'darkorange') +
+	labs(title = 'ShortPos')
+ggplotly(p)
+
+```
+

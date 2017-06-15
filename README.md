@@ -7,4 +7,3 @@ Quant strategy for China Futures Market
     |       |-------- Alpha101
     |       |-------- StatArb
     |       |-------- Data
-    
