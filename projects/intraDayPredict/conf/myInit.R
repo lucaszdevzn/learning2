@@ -35,7 +35,7 @@ for( conns in dbListConnections(MySQL()) ){
 
 mysql_user <- 'fl'
 mysql_pwd  <- 'abc@123'
-mysql_host <- "192.168.1.106"
+mysql_host <- "127.0.0.1"
 mysql_port <- 3306
 
 #---------------------------------------------------
