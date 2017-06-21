@@ -20,7 +20,10 @@ source('./conf/myInit.R')
 ##   - inSample
 ##   - dtY
 ## =============================================================================
-source('./R/intraDayPredict_01_fetch_data.R')
+
+system.time(
+    source('./R/intraDayPredict_01_fetch_data.R')
+)
 
 ## =============================================================================
 ## 02: 
