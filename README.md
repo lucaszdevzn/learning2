@@ -1,9 +1,22 @@
 # myStrat
 Quant strategy for China Futures Market
 
-    myStrat/
-    |------ codes/
-    |------ projects/
-    |       |-------- Alpha101
-    |       |-------- StatArb
-    |       |-------- Data
+```bash
+.
+├── codes
+│   ├── cpp
+│   ├── MySQL
+│   ├── python
+│   ├── R
+│   ├── readme.md
+│   └── src
+├── projects
+│   ├── Alpha101
+│   ├── intraDayPredict
+│   ├── MySQLData
+│   ├── oiRank
+│   ├── Research
+│   └── StatArb
+└── README.md
+```
+
