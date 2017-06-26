@@ -1,3 +1,6 @@
+## =============================================================================
+## 主力合约的分钟数据
+## =============================================================================
 create table mainContractMinuteData(
     TradingDay      DATE     NOT NULL,
     Minute          TIME NOT NULL,
@@ -27,6 +30,9 @@ SELECT a.TradingDay,
     a.Volume    as volume,
     a.Turnover  as turnover
 From minute as a,
-  main_contract_daily as b
+     main_contract_daily as b
 WHERE a.TradingDay = b.TradingDay
 AND   a.InstrumentID = b.Main_contract;
+
+
+
