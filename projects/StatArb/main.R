@@ -22,7 +22,11 @@ source('./conf/myInit.R')
 ## =============================================================================
 
 system.time(
-    source('./R/StatArb_01_fetch_data.R')
+    source('./R/StatArb_Product_01_fetch_data.R')
+)
+
+system.time(
+    source('./R/StatArb_Calendar_01_fetch_data.R')
 )
 
 ## =============================================================================
