@@ -9,12 +9,31 @@
 
 ## 项目的主要文件结构为
 
-    StatArb/
-    |-- R/         ## 主要存放 R 代码与函数
-    |-- data/      ## 原始数据，不可改动
-    |-- doc/       ## 项目文档说明
-    |-- fig/       ## 产生的图形
-    |-- output/    ## 由脚本生成的数据、文件等
-    |-- src/       ## py, cpp
-    |-- main.R     ## 主要的执行函数
+```bash
+.
+├── conf
+│   ├── myConfig.R
+│   └── myInit.R
+├── data
+├── doc
+│   ├── skeleton.bib
+│   ├── StatArb_Calendar_cache
+│   ├── StatArb_Calendar_files
+│   ├── StatArb_Calendar.html
+│   └── StatArb_Calendar.Rmd
+├── main.R
+├── R
+│   ├── StatArb_Calendar_01_fetch_data.R
+│   ├── StatArb_Product_01_fetch_data.R
+│   ├── 跨品种套利
+│   └── 跨期套利
+├── README.md
+├── research
+│   ├── books
+│   ├── cointegration
+│   ├── papers
+│   ├── readings
+│   └── Rscripts
+└── src
+```
 
