@@ -34,3 +34,7 @@ system.time(
 ##   - run backTesting
 ## =============================================================================
 source('./R/intraDayPredict_02_run_backtesting.R')
+
+
+
+rmarkdown::render("./doc/StatArb_Calendar.Rmd", clean = TRUE, quiet = TRUE)
