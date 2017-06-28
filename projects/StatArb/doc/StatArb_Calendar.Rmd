@@ -1,0 +1,44 @@
+---
+title: “Stat Arb：统计套利”
+author: "William Fang"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+biblio-title: 参考文献
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+--------------------------------------------------------------------------------
+```{r setup, include=FALSE}
+library(tufte)
+# tufte版本变化之后更新knitr缓存
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+```
+
+
+# 跨期套利
+
+## Idea
+
+## Pseudo
+
+## Results
+
+--------------------------------------------------------------------------------
+
+# 跨品种
+
+## Idea
+
+## Pseudo
+
+## Results
+
