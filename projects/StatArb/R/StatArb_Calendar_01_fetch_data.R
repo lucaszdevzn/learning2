@@ -1,12 +1,38 @@
-## =============================================================================
+################################################################################
+## StatArb_Calendar_01_fetch_data.R
 ## 
-## =============================================================================
-product <- 'i'
-lagMonth <- 4
+## 1. 参数设置
+## 2. 提取数据库的数据
+## 
+## Input:
+## @product: 需要处理的合约品种
+## @leadMonth: 近月合约与远月合约的月份差
+## @estimatePeriod: 参数估计使用的长度，以分钟计算
+## @forecastPeriod: 做预测的时间长度
+## 
+## Output:
+## @dt
+################################################################################
 
-estimatedPeriod <- 200
-estimatedRange  <- 3
-closingRange    <- 2
+## =============================================================================
+## 1. 参数设置
+## =============================================================================
+
+## 品种
+product <- 'i'
+
+## 近月合约与远月合约的月份差
+leadMonth <- 4
+
+## 参数估计使用的区间长度：分钟
+estimatedPeriod <- 100
+
+## 预测区间长度：分钟
+forecastPeriod <- 60
+
+## =============================================================================
+## 2. 从数据库提取数据
+## =============================================================================
 
 mysql <- mysqlFetch('china_futures_bar')
 
@@ -21,12 +47,12 @@ productInfo <- data.table()
 for (i in 1:nrow(temp)) {
     ## -------------------------------------------------------------------------
     tempMain <- temp[i,main_contract]
-    tempSub <- gsub('[a-zA-Z]', '', tempMain) %>% 
-               as.yearmon(.,'%y%m')  %>% 
-               as.Date(.) %m+% months(lagMonth) %>% 
-               as.character() %>% 
-               gsub('-','',.) %>% 
-               substr(.,3,6) %>% 
+    tempSub <- gsub('[a-zA-Z]', '', tempMain) %>%
+               as.yearmon(.,'%y%m')  %>%
+               as.Date(.) %m+% months(leadMonth) %>%
+               as.character() %>%
+               gsub('-','',.) %>%
+               substr(.,3,6) %>%
                paste0(product,.)
     query <- paste0("select min(TradingDay), max(TradingDay)
                     from main_contract_daily
@@ -37,9 +63,10 @@ for (i in 1:nrow(temp)) {
         data.table(tempRes[1,1], tempRes[1,2], tempMain, tempSub))
 }
 names(productInfo) <- c('beginDate', 'endDate', 'mainContract', 'subContract')
-productInfo <- productInfo[-1]
+# productInfo <- productInfo[-1]
+productInfo
 
-tempFields <- c('TradingDay', 'Minute', 'NumericExchTime', 
+tempFields <- c('TradingDay', 'Minute', 'NumericExchTime',
                 'InstrumentID',
                 'OpenPrice as open',
                 'HighPrice as high',
@@ -47,6 +74,8 @@ tempFields <- c('TradingDay', 'Minute', 'NumericExchTime',
                 'ClosePrice as close',
                 'Volume as volume', 'Turnover as turnover')
 
+## -----------------------------------------------------------------------------
+## 主力合约数据：近月合约　--> y
 dtMain <- lapply(1:nrow(productInfo), function(i){
     query <- paste("select", paste(tempFields, collapse = ','),
                    "from minute
@@ -56,6 +85,8 @@ dtMain <- lapply(1:nrow(productInfo), function(i){
     tempRes <- dbGetQuery(mysql,query) %>% as.data.table()
 }) %>% rbindlist()
 
+## -----------------------------------------------------------------------------
+## 次主力合约数据：远月合约 --> x
 dtSub <- lapply(1:nrow(productInfo), function(i){
     query <- paste("select", paste(tempFields, collapse = ','),
                    "from minute
@@ -65,318 +96,21 @@ dtSub <- lapply(1:nrow(productInfo), function(i){
     tempRes <- dbGetQuery(mysql,query) %>% as.data.table()
 }) %>% rbindlist()
 
-dt <- merge(dtSub, dtMain, by = c('TradingDay','Minute','NumericExchTime')) %>% 
-        .[order(TradingDay, NumericExchTime)]
-
-p <- ggplot(dt) +
-    geom_line(aes(x = 1:nrow(dt), y = close.x), color = 'orange') +
-    geom_line(aes(x = 1:nrow(dt), y = close.y), color = 'steelblue')
-print(p)
-dev.new()
-ggplotly(p)
-
-## =============================================================================
-
-dt_inSample <- dt[TradingDay < '2017-05-01']
-dt_outSample <- dt[TradingDay >= '2017-05-01']
-
-dt_inSample[, spd := close.y - close.x]
-
-dt_inSample[, ':='(
-    spdMean = sapply(1:nrow(.SD), function(i){
-        if (i <= estimatedPeriod) {
-            return(NA)
-        } else {
-            temp <- .SD[(i - estimatedPeriod + 1) : (i)]
-            tempRes <- mean(temp$close.y - temp$close.x)
-        }
-    }),
-    spdSD = sapply(1:nrow(.SD), function(i){
-        if (i <= estimatedPeriod) {
-            return(NA)
-        } else {
-            temp <- .SD[(i - estimatedPeriod + 1) : (i)]
-            tempRes <- sd(temp$close.y - temp$close.x)
-        }
-    })
-)]
-
-dt_inSample <- dt_inSample[!is.na(spdMean) & !is.na(spdSD)]
-
-dt_inSample[, ':='(spdUpper = spdMean + estimatedRange * spdSD,
-                   spdLower = spdMean - estimatedRange * spdSD)]
-
-## =============================================================================
-
-dt_inSample[, signal := sapply(1:.N, function(i){
-    if (.SD[i, spd > (spdMean + estimatedRange  * spdSD)] ){
-        tempRes <- +1
-    }
-    if (.SD[i, spd < (spdMean + estimatedRange  * spdSD)]) {
-        tempRes <- -1
-    }
-    if (.SD[i, spd %between% c( (spdMean - closingRange * spdSD), (spdMean + closingRange * spdSD) )]) {
-        tempRes <- 0
-    }
-    return(tempRes)
-})]
-
-dt_inSample[, signal := shift(signal, 1L, type = 'lag')]
-
-dt_inSample[, rtn := -1 * signal * (spd - shift(spd, 1L, type = 'lag')) / (close.y + close.x)]
-dt_inSample <- dt_inSample[!is.na(rtn)]
-p <- ggplot(dt_inSample, aes(x = 1:nrow(dt_inSample), y = cumsum(rtn))) + 
-    geom_line(color = 'steelblue', size = 1, alpha = 0.5)
-print(p)
-ggplotly(p)
-dt_inSample[,tradingCount := abs(signal) - abs(shift(signal, 1L, type = 'lag'))]
-print(nrow(dt_inSample[tradingCount != 0]))
-
-dt_inSample[,sum(rtn)] / nrow(dt_inSample[tradingCount != 0])
-
-## =============================================================================
-dt_inSample[, yRtn :=  (spd - shift(spd, 30L, type = 'lag')) /
-                       (close.y + close.x)]
-dt_inSample <- dt_inSample[!is.na(yRtn)]
-
-dt_inSample[, spdMeanMA := sapply(1:nrow(.SD), function(i){
-    if (i <= 30){
-        return(NA)
-    } else {
-        temp <- .SD[( i- 30 + 1) : (i)]
-        tempRes <- temp[,mean(spdMean)]
-    }
-    return(tempRes)
-})]
-tempX  <- dt_inSample[!is.na(spdMeanMA), spdMeanMA]
-tempY <- dt_inSample[!is.na(spdMeanMA), yRtn]
-
-fit <- lm(tempY ~ tempX + 0);summary(fit)
-
-
-
-tempDailyRtn <- dt_inSample[, .(dailyRtn = .SD[,sum(rtn)]), by = 'TradingDay']
-
-sharpRatio <- tempDailyRtn[,mean(dailyRtn) / sd(dailyRtn) * sqrt(252)]
-print(sharpRatio)
-
-dtRtn <- dt_inSample[!is.na(spdMeanMA),.(spdMeanMA, yRtn)]
-dtRtn[, hatRtn := yRtn * sign(-fit$coefficients)]
-
-dtRtn[, cumRtn := cumsum(hatRtn)]
-
-ggplot(dtRtn, aes(x = 1:nrow(dtRtn), y = cumRtn)) + 
-    geom_line(color = 'steelblue')
-
-
-## =============================================================================
-## 预测
-## =============================================================================
-dt_inSample <- dt[TradingDay < '2017-04-01']
-
-forecastPeriod <- 30
-
-dt_inSample[, spd := close.y - close.x]
-dt_inSample[, spdLead := shift(spd, forecastPeriod, type = 'lead')]
-
-dt_inSample[, ":="(
-                spdRtn = (spdLead - spd) / (close.x + close.y)
-            )]
-dt_inSample[, summary(spdRtn)]
-ggplot(dt_inSample, aes(x = 1:nrow(dt_inSample), y = spdRtn)) + 
-    geom_point(color = 'orange', alpha = 0.1)
-
-## 发现 spdRtn 不对
-## i1701  i1705
-## ...    ...
-## i1701  i1705
-## i1705  i1709
-
-dt_inSample[, ":="(InstrumentXLag = shift(InstrumentID.x, forecastPeriod, type = 'lag'),
-                   InstrumentYLag = shift(InstrumentID.y, forecastPeriod, type = 'lag'))]
-
-dt_inSample <- dt_inSample[InstrumentID.x == InstrumentXLag][InstrumentID.y == InstrumentYLag]
-dt_inSample[, spdRtn := (spdLead - spd) / (close.x + close.y)]
-dt_inSample <- dt_inSample[!is.na(spd) & !is.na(spdRtn)]
-
-ggplot(dt_inSample, aes(x = 1:nrow(dt_inSample), y = spdRtn)) + 
-    geom_point(color = 'orange', alpha = 0.1)
-dt_inSample[, summary(spdRtn)]
-
-## spd：做标准化：z-score 
-system.time({
 ## -----------------------------------------------------------------------------
-cl <- makeCluster(detectCores(), type = 'FORK')
-tempZ <- parSapply(cl, 1:nrow(dt_inSample), function(i){
-    if (i <= forecastPeriod) {
-        tempRes <- NA
-    } else {
-        temp <- dt_inSample[(i - forecastPeriod) : (i)]
-        if (temp[1, InstrumentID.x] != temp[.N, InstrumentID.x] |
-           temp[1, InstrumentID.y] != temp[.N, InstrumentID.y] ) {
-            tempRes <- NA
-        } else {
-            tempRes <- (temp[.N, spd] - temp[, mean(spd)]) / temp[, sd(spd)]
-        }
-    }
-    return(tempRes)
-})
-stopCluster(cl)
-## -----------------------------------------------------------------------------
-})
-
-dt_inSample[, spdZ := tempZ]
-
-## spd：做标准化：z-score 
-system.time({
-## -----------------------------------------------------------------------------
-cl <- makeCluster(detectCores(), type = 'FORK')
-tempRank <- parSapply(cl, 1:nrow(dt_inSample), function(i){
-    if (i <= forecastPeriod) {
-        tempRes <- NA
-    } else {
-        temp <- dt_inSample[(i - forecastPeriod) : (i)]
-        if (temp[1, InstrumentID.x] != temp[.N, InstrumentID.x] |
-           temp[1, InstrumentID.y] != temp[.N, InstrumentID.y] ) {
-            tempRes <- NA
-        } else {
-            tempRes <- base::rank(temp$spd, ties.method = 'max')[which(temp$spd == temp[.N, spd])][1]
-        }
-    }
-    return(tempRes)
-})
-stopCluster(cl)
-## -----------------------------------------------------------------------------
-})
-
-dt_inSample[, spdRank := tempRank]
-
-## spd：做标准化：z-score 
-system.time({
-## -----------------------------------------------------------------------------
-cl <- makeCluster(detectCores(), type = 'FORK')
-tempRankZ <- parSapply(cl, 1:nrow(dt_inSample), function(i){
-    if (i <= forecastPeriod) {
-        tempRes <- NA
-    } else {
-        temp <- dt_inSample[(i - forecastPeriod) : (i)]
-        if (temp[1, InstrumentID.x] != temp[.N, InstrumentID.x] |
-           temp[1, InstrumentID.y] != temp[.N, InstrumentID.y] ) {
-            tempRes <- NA
-        } else {
-            tempRes <- (temp[.N, spdRank] - temp[, mean(spdRank)]) / temp[, sd(spdRank)]
-        }
-    }
-    return(tempRes)
-})
-stopCluster(cl)
-## -----------------------------------------------------------------------------
-})
-
-dt_inSample[, spdRankZ := tempRankZ]
-
-##
-## dtRtn
-##
-dtRtn <- dt_inSample[!is.na(spdRtn) & !is.na(spdZ) & !is.na(spdRank) & !is.na(spdRankZ)][spdRtn %between% c(-0.01, 0.01)]
-fit <- lm(data = dtRtn, spdRtn ~ spdZ + 0)
-summary(fit)
-
-temp <- dtRtn
-
-
-fit <- lm(data = dtRtn, spdRtn ~ spdRankZ + 0)
-summary(fit)
-p <- ggplot(temp) +
-    geom_line(aes(x = 1:nrow(temp), y = spdZ * 3 * fit$coefficients), color = 'orange', alpha = 0.8, size = 0.5) + 
-    geom_line(aes(x = 1:nrow(temp), y = spdRtn), color = 'steelblue', alpha = 0.5, size = 0.6)
-print(p)
-ggplotly(p)
-
-fit <- lm(data = dtRtn, spdRtn ~ spdRankZ + 0)
-summary(fit)
-p <- ggplot(temp) +
-    geom_line(aes(x = 1:nrow(temp), y = spdRankZ * 3 * fit$coefficients), color = 'orange', alpha = 0.8, size = 0.5) + 
-    geom_line(aes(x = 1:nrow(temp), y = spdRtn), color = 'steelblue', alpha = 0.5, size = 0.6)
-print(p)
-ggplotly(p)
-
-dtRtn[, rtn := -spdRtn * sign(fit$coefficients)]
-dtRtn[, cumRtn := cumsum(rtn)]
-
-ggplot(dtRtn, aes(x = 1:nrow(dtRtn), y = cumRtn)) +
-    geom_line(color = 'steelblue')
-
-tempDailyRtn <- dtRtn[, .(dailyRtn = .SD[,sum(rtn)]), by = 'TradingDay']
-sharpRatio <- tempDailyRtn[,mean(dailyRtn) / sd(dailyRtn) * sqrt(252)]
-print(sharpRatio)
-
-
-dtRtn[spdZ > 2, signal := 1]
-dtRtn[spdZ < -2, signal := -1]
-dtRtn[is.na(signal), signal := 0]
-dtRtn[, forecastRtn := -spdRtn * signal]
-dtRtn[, forecastRtnCum := cumsum(forecastRtn)]
-
-tempDailyRtn <- dtRtn[, .(dailyRtn = .SD[,sum(forecastRtn)]), by = 'TradingDay']
-sharpRatio <- tempDailyRtn[,mean(dailyRtn) / sd(dailyRtn) * sqrt(252)]
-print(sharpRatio)
-tempDailyRtn$TradingDay <- ymd(tempDailyRtn$TradingDay)
-ggplot(tempDailyRtn, aes(x = TradingDay, y = dailyRtn)) + geom_line()
-
-ggplot(dtRtn, aes(x = 1:nrow(dtRtn), y = forecastRtnCum)) +
-    geom_line(color = 'steelblue')
-## -----------------------------------------------------------------------------
-# dt_inSample[, ':='(
-#     spdMean = sapply(1:nrow(.SD), function(i){
-#         if (i <= estimatedPeriod) {
-#             tempRes <- NA
-#         } else {
-#             temp <- .SD[(i - estimatedPeriod) : (i)]
-#             if (temp[1,InstrumentID.x] != temp[.N, InstrumentID.x] |
-#                 temp[1,InstrumentID.y] != temp[.N, InstrumentID.y] ){
-#                 tempRes <- NA
-#             } else {
-#                 tempRes <- mean(temp$close.y - temp$close.x)
-#             }
-#         }
-#         return(tempRes)
-#     }),
-#     spdSD = sapply(1:nrow(.SD), function(i){
-#         if (i <= estimatedPeriod) {
-#             tempRes <- NA
-#         } else {
-#             temp <- .SD[(i - estimatedPeriod) : (i)]
-#             if (temp[1,InstrumentID.x] != temp[.N, InstrumentID.x] |
-#                 temp[1,InstrumentID.y] != temp[.N, InstrumentID.y] ){
-#                 tempRes <- NA
-#             } else {
-#                 tempRes <- sd(temp$close.y - temp$close.x)
-#             }
-#         }
-#         return(tempRes)
-#     })
-# )]
-
-# dt_inSample[, ':='(spdUpper = spdMean + estimatedRange * spdSD,
-#                    spdLower = spdMean - estimatedRange * spdSD)]
+## 把数据拼接在一起，
+## 并按照日期与分钟做排序，
+## 形成对齐的时间序列数据
+dt <- merge(dtSub, dtMain, by = c('TradingDay','Minute','NumericExchTime')) %>%
+        .[order(TradingDay, NumericExchTime, InstrumentID.x, InstrumentID.y)]
 
 ## -----------------------------------------------------------------------------
-dtRtn <- dt_inSample[!is.na(spd) & !is.na(spdMean) & !is.na(spdSD) & !is.na(pairRtn)]
+## 把价格的走势图拿出来溜溜
+tempDT <- dt[,.(minuteIndex = 1:nrow(dt), close.x,　close.y)]
 
-dtRtn[, summary(pairRtn)]
-
-ggplot(dtRtn, aes(x = 1:nrow(dtRtn), y = pairRtn)) + 
-    geom_point(color = 'steelblue', alpha = 0.05, size = 0.5)
-
-fit <- lm(data = dt_inSample, spdRtn ~ spd + 0)
-summary(fit)
-
-
-ggplot(dt_inSample) +
-    geom_line(aes(x = 1:nrow(dtRtn), y = spdSD / 10), color = 'orange') +
-    geom_line(aes(x = 1:nrow(dtRtn), y = pairRtn), color = 'steelblue', alpha = 0.2)
-
-
-
-
+## 使用　gather 函数拼接
+temp <- gather(tempDT,instrumentID,closePrice, -minuteIndex)
+ggplot(temp, aes(x = minuteIndex, y = closePrice, color = instrumentID)) +
+  geom_line() +
+  labs(title = paste(product,'==> 近月合约与远月合约的分钟 closePrice'),
+       x = 'minuteIndex', y = 'closePrice',
+       caption = '@williamfang')
