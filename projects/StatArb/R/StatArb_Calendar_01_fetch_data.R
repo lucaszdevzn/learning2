@@ -1,15 +1,15 @@
 ################################################################################
 ## StatArb_Calendar_01_fetch_data.R
-## 
+##
 ## 1. 参数设置
 ## 2. 提取数据库的数据
-## 
+##
 ## Input:
 ## @product: 需要处理的合约品种
 ## @leadMonth: 近月合约与远月合约的月份差
 ## @estimatePeriod: 参数估计使用的长度，以分钟计算
 ## @forecastPeriod: 做预测的时间长度
-## 
+##
 ## Output:
 ## @dt
 ################################################################################
@@ -25,7 +25,7 @@ product <- 'i'
 leadMonth <- 4
 
 ## 参数估计使用的区间长度：分钟
-estimatedPeriod <- 100
+estimatePeriod <- 100
 
 ## 预测区间长度：分钟
 forecastPeriod <- 60
@@ -41,7 +41,7 @@ query <- paste0("SELECT DISTINCT main_contract
                 WHERE Product = ", "'", product,"'",
                 " AND TradingDay >= 20160701")
 temp <- dbGetQuery(mysql,query) %>% as.data.table() %>% .[-c(1:1)] # 去掉第一个
-temp
+print(temp)
 
 productInfo <- data.table()
 for (i in 1:nrow(temp)) {
@@ -64,7 +64,7 @@ for (i in 1:nrow(temp)) {
 }
 names(productInfo) <- c('beginDate', 'endDate', 'mainContract', 'subContract')
 # productInfo <- productInfo[-1]
-productInfo
+print(productInfo)
 
 tempFields <- c('TradingDay', 'Minute', 'NumericExchTime',
                 'InstrumentID',
@@ -109,8 +109,9 @@ tempDT <- dt[,.(minuteIndex = 1:nrow(dt), close.x,　close.y)]
 
 ## 使用　gather 函数拼接
 temp <- gather(tempDT,instrumentID,closePrice, -minuteIndex)
-ggplot(temp, aes(x = minuteIndex, y = closePrice, color = instrumentID)) +
+p <- ggplot(temp, aes(x = minuteIndex, y = closePrice, color = instrumentID)) +
   geom_line() +
   labs(title = paste(product,'==> 近月合约与远月合约的分钟 closePrice'),
        x = 'minuteIndex', y = 'closePrice',
        caption = '@williamfang')
+print(p)
