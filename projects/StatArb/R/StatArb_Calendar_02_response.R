@@ -45,6 +45,8 @@ dt_inSample <- dt_inSample[!is.na(spdCloseLead)]
 ## 作为预测 response
 dt_inSample[, ":="(spdCloseRtn = (spdCloseLead - spdClose) / (close.x + close.y))]
 
+dt_inSample[, summary(spdCloseRtn)]
+print(t.test(dt_inSample$spdCloseRtn))
 ## -----------------------------------------------------------------------------
 ## 画图
 
@@ -55,12 +57,12 @@ p <- ggplot(dt_inSample, aes(x = 1:nrow(dt_inSample), y = spdClose)) +
              x = 'minuteIndex', y = 'spdClose',
              caption = '@williamfang')
 print(p)
-dev.new()
+
 ## =============================================================================
 dt_inSample[, ":="(
-    spdCloseMA = rollapply(spdClose, estimatedPeriod, mean,
+    spdCloseMA = rollapply(spdClose, estimatePeriod, mean,
                            fill = NA, align = 'right'),
-    spdCloseSD = rollapply(spdClose, estimatedPeriod, sd,
+    spdCloseSD = rollapply(spdClose, estimatePeriod, sd,
                            fill = NA, align = 'right')
 )]
 
@@ -76,6 +78,3 @@ p <- ggplot(tempG, aes(x = minuteIndex, y = spread, color = id)) +
          x = 'minuteIndex', y = 'spdClose',
          caption = '@williamfang')
 print(p)
-
-
-
