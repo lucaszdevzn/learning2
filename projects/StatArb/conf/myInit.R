@@ -9,7 +9,7 @@
 
 pkgs <- c("tidyverse", "data.table", "parallel",
           "RMySQL", "stringr", "bit64", "Rcpp",
-          "lubridate","zoo",'beepr','plotly')
+          "lubridate","zoo",'beepr','plotly','rowr')
 ##------------------------------------------------------------------------------
 if(length(pkgs[!pkgs %in% installed.packages()]) != 0){
   sapply(pkgs[!pkgs %in% installed.packages()], install.packages)
@@ -43,12 +43,12 @@ mysql_port <- 3306
 # 函数，主要输入为
 # database
 #---------------------------------------------------
-mysqlFetch <- function(x){
+mysqlFetch <- function(x, host = mysql_host){
   temp <- dbConnect(MySQL(),
                     dbname   = as.character(x),
                     user     = mysql_user,
                     password = mysql_pwd,
-                    host     = mysql_host,
+                    host     = host,
                     port     = mysql_port
                     )
 }
