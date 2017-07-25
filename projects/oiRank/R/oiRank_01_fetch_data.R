@@ -25,8 +25,12 @@ if (! file.exists(tempFile) ) {
     dtOiRank <- dbGetQuery(mysql, "
             SELECT *
             FROM oiRank
-    ") %>% as.data.table()
+    ") %>% as.data.table() %>% 
+    .[, ProductID := gsub('[0-9]', '', InstrumentID)]
 
+    setcolorder(dtOiRank, c('TradingDay', 'InstrumentID', 'ProductID', 
+                           colnames(dtOiRank)[3:(ncol(dtOiRank)-1)])
+               )
     write.fst(dtOiRank, tempFile)
 }
 
