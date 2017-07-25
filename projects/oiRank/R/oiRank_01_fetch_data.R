@@ -32,3 +32,15 @@ if (! file.exists(tempFile) ) {
 
 dtOiRank <- read.fst(tempFile, as.data.table=TRUE)
 ## =============================================================================
+
+## =============================================================================
+## 因为有部分期货公司改名了，
+## 所以需要用新的期货公司名称来替代原来的名称
+## =============================================================================
+futuresComp <- fread('./data/futures_company_names.csv')
+
+for (i in 1:nrow(futuresComp)) {
+    dtOiRank[BrokerID == futuresComp[i,oldNames], 
+             BrokerID := futuresComp[i,newNames]]
+}
+## =============================================================================
