@@ -8,6 +8,7 @@
 ## 
 ## Output:
 ## @param dtOiRank：数据
+## @param dtMain: 主力合约信息
 ## 
 ## Author: William Fang
 ## Created Date: 2017-07-24
@@ -49,3 +50,32 @@ for (i in 1:nrow(futuresComp)) {
              BrokerID := futuresComp[i,newNames]]
 }
 ## =============================================================================
+
+
+## =============================================================================
+## china_futures_bar
+## =============================================================================
+tempFile <- './data/main.fst'
+
+if (! file.exists(tempFile)) {
+    mysql <- mysqlFetch('china_futures_bar')
+    dtMain <- dbGetQuery(mysql,"
+            SELECT a.TradingDay,
+                   a.InstrumentID,
+                   a.ClosePrice as close,
+                   a.Volume as volume,
+                   a.Turnover as turnover,
+                   b.Main_contract as main,
+                   b.Prod_index as priceIndex
+            FROM daily AS a, main_contract_daily AS b
+            WHERE a.TradingDay = b.TradingDay
+            AND a.InstrumentID = b.Main_contract
+            # AND a.TradingDay >= 20151001
+            AND a.Sector = 'allday';
+    ") %>% as.data.table()
+
+    write.fst(dtMain, tempFile)
+}
+
+dtMain <- read.fst(tempFile, as.data.table=TRUE)
+dtMain[, TradingDay := as.Date(TradingDay)]
