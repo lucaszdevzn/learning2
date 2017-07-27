@@ -35,6 +35,7 @@ if (! file.exists(tempFile) ) {
 }
 
 dtOiRank <- read.fst(tempFile, as.data.table=TRUE)
+dtOiRank[, TradingDay := as.Date(TradingDay)]
 ## =============================================================================
 
 ## =============================================================================
