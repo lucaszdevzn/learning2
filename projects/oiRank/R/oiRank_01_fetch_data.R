@@ -65,14 +65,18 @@ if (! file.exists(tempFile)) {
                    a.ClosePrice as close,
                    a.Volume as volume,
                    a.Turnover as turnover,
-                   b.Main_contract as main,
                    b.Prod_index as priceIndex
             FROM daily AS a, main_contract_daily AS b
             WHERE a.TradingDay = b.TradingDay
             AND a.InstrumentID = b.Main_contract
             # AND a.TradingDay >= 20151001
             AND a.Sector = 'allday';
-    ") %>% as.data.table()
+    ") %>% as.data.table() %>% 
+    .[, ProductID := gsub('[0-9]', '', InstrumentID)]
+
+    setcolorder(dtMain, c('TradingDay', 'InstrumentID', 'ProductID', 
+                           colnames(dtMain)[3:(ncol(dtMain)-1)])
+               )
 
     write.fst(dtMain, tempFile)
 }
