@@ -1,6 +1,6 @@
 *
 */
 
-!*.html
 !*.Rmd
+!*.html
 !*.gitignore

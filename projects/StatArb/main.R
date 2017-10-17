@@ -7,34 +7,56 @@ setwd('/home/william/Documents/myStrat/projects/StatArb')
 
 ## =============================================================================
 ## load setup
-source('./conf/myInit.R')
+suppressWarnings({
+    source('../../conf/Rconf/myInit.R')
+})
 ## =============================================================================
 
 ## =============================================================================
-## 01: 
+## 01:
 ##   - fetch data form MySQL
 ##   - manipulate data
-## 
+##
 ## output:
 ##   - dt
 ##   - inSample
 ##   - dtY
 ## =============================================================================
+source('./R/StatArb_Calendar_01_fetch_data.R')
 
-system.time(
-    source('./R/StatArb_Product_01_fetch_data.R')
-)
-
-system.time(
-    source('./R/StatArb_Calendar_01_fetch_data.R')
-)
 
 ## =============================================================================
-## 02: 
-##   - run backTesting
+## 02:
+##   - calculate response
 ## =============================================================================
-source('./R/intraDayPredict_02_run_backtesting.R')
+source('./R/StatArb_Calendar_02_response.R')
 
 
 
-rmarkdown::render("./doc/StatArb_Calendar.Rmd", clean = TRUE, quiet = TRUE)
+## =============================================================================
+## 03:
+##   - generate signal
+## ---------------------------------------------
+source('./R/StatArb_Calendar_03_predictor_01.R')
+
+## ---------------------------------------------
+source('./R/StatArb_Calendar_03_predictor_02.R')
+
+## ---------------------------------------------
+source('./R/StatArb_Calendar_03_predictor_03.R')
+
+## ---------------------------------------------
+source('./R/StatArb_Calendar_03_predictor_04.R')
+
+## ---------------------------------------------
+source('./R/StatArb_Calendar_03_predictor_05.R')
+## =============================================================================
+
+
+## =============================================================================
+## 04:
+##   - calculate rtn
+## =============================================================================
+source('./R/StatArb_Calendar_04_rtn.R')
+
+

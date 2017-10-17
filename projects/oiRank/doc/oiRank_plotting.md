@@ -1,0 +1,289 @@
+---
+title: "oiRank"
+author: "William Fang"
+date: "2017-07-26"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```r
+################################################################################
+## oiRank 策略
+################################################################################
+
+rm(list = ls())
+################################################################################
+## Step0: 初始参数设置
+################################################################################
+## temp <- dirname(parent.frame(1)$ofile)
+## setwd(temp)
+setwd("/home/william/Documents/myStrat/projects/oiRank")
+
+suppressMessages(
+  suppressWarnings({
+    source('../../conf/Rconf/myInit.R');
+    ChinaFuturesCalendar <- fread('../../data/ChinaFuturesCalendar_2011_2017.csv')
+  })
+)
+
+################################################################################
+## Step1: 获取数据
+################################################################################
+source('./R/oiRank_01_fetch_data.R')
+
+################################################################################
+## Step2: 
+################################################################################
+# source('./R/oiRank_02_alpha_cal_product.R')
+
+allInstrumentID <- c('rb','ru','zn','cu',
+                     'i','m','jm','j','v',
+                     'SR','TA')
+allClassID <- c('volume','position')
+# cl <- makeCluster(detectCores(), type = "FORK")
+# parSapply(cl, 1:length(allInstrumentID), function(i){
+#     tempInstrumentID <- allInstrumentID[i]
+#     source('./R/oiRank_02_alpha_plot.R')
+# })
+# stopCluster(cl)
+
+for (i in 1:1) {
+#    print(i)
+    tempInstrumentID <- allInstrumentID[i]
+    for (j in 1:length(allClassID)) {
+      tempClassID <- allClassID[j]
+
+################################################################################
+## oiRank_02_alpha_cal_product.R
+## 
+## 计算 productID
+## 
+## Input:
+## @param dtOiRank
+## 
+## Output:
+## @param 
+## 
+## Author: William Fang
+## Created Date: 2017-07-24
+################################################################################
+
+
+## =============================================================================
+## 获取合约品种
+## =============================================================================
+## 去掉股指期货
+# dt <- dtOiRank[!grep('^(IF|IH|IC|TF|T)[0-9]{4}', InstrumentID)]
+# tempInstrumentID <- c('cu','ru','rb','ni','zn')
+# tempInstrumentID <- c('rb')
+
+if (tempClassID == 'volume') {
+  dt <- dtOiRank[ProductID %in% tempInstrumentID][ClassID == 'Turnover']
+} else {
+  dt <- dtOiRank[ProductID %in% tempInstrumentID][ClassID != 'Turnover']
+}
+
+dt <-  dt[TradingDay %between% c('2015-10-01', dtOiRank[,as.character(max(TradingDay))])] %>% 
+        .[, .(total = sum(Amount))
+          , by = c('TradingDay','ProductID','BrokerID')]
+
+dt[, totalPct := total / .SD[, sum(total)]
+   , by = c('TradingDay','ProductID')]
+
+## -----------------------------------------------------------------------------
+## 选择进入排名前 10 的期货公司
+## 
+dt[, RankNew := rank(-totalPct, ties.method = 'max')
+   , by = c('TradingDay','ProductID')]
+# dt[TradingDay == '2011-01-04' & ProductID == 'IF'][order(-total)]
+
+## 做判断，如果进入前 10, 得分 1
+dt[, RankScore := ifelse(RankNew <= 10, 1, 0)]
+
+topCompany <- dt[, .(totalRankScore = sum(RankScore))
+   , by = c('ProductID','BrokerID')] %>% 
+   .[order(-totalRankScore)] %>% 
+   .[1:10,BrokerID]
+   # .[totalRankScore > 200, unique(BrokerID)]
+topCompany
+
+dt <- dt[BrokerID %in% topCompany]
+
+## =============================================================================
+
+## =============================================================================
+## 画图看看
+## =============================================================================
+temp <- gather(dt[,.(TradingDay,BrokerID,total,totalPct)], 
+              key, value, -c(TradingDay,BrokerID)) %>% as.data.table()
+p <- ggplot(temp, aes(x = TradingDay, y = value, color = BrokerID)) +
+    geom_line(size = 0.15, apha = 0.2) +
+    geom_smooth(se = FALSE, size = 0.6, span = 0.05, alpha = 0.9) + 
+    facet_grid(key ~ ., scales = "free") + 
+    labs(x = 'TradingDay', y = 'Values', 
+        title = paste(tempInstrumentID," :==> ", tempClassID))
+print(ggplotly(p))
+      
+    }
+}
+```
+
+```
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+```
+
+```
+## Warning: Ignoring unknown parameters: apha
+```
+
+```
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+```
+
+```
+## `geom_smooth()` using method = 'loess'
+```
+
+```
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+```
+
+```
+## Warning: Ignoring unknown parameters: apha
+```
+
+```
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+```
+
+```
+## `geom_smooth()` using method = 'loess'
+```
+
+```
+## Warning in structure(NULL, class = "waiver"): Calling 'structure(NULL, *)' is deprecated, as NULL cannot have attributes.
+##   Consider 'structure(list(), *)' instead.
+```
+

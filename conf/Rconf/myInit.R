@@ -1,16 +1,15 @@
 ################################################################################
 ## myInit.R
-## 设置
+## 初始化设置
 # __1. 账号、密码__
 # 2. 文件路径
 # 3. 需要的软件包
 # __4. 参数设置__
 ################################################################################
-
+## =============================================================================
 pkgs <- c("tidyverse", "data.table", "parallel",
           "RMySQL", "stringr", "bit64", "Rcpp",
-          "lubridate","zoo",'beepr','plotly',
-          "fst")
+          "lubridate","zoo",'beepr','plotly','rowr')
 ##------------------------------------------------------------------------------
 if(length(pkgs[!pkgs %in% installed.packages()]) != 0){
   sapply(pkgs[!pkgs %in% installed.packages()], install.packages)
@@ -19,10 +18,10 @@ if(length(pkgs[!pkgs %in% installed.packages()]) != 0){
 sapply(pkgs, require, character.only = TRUE)
 
 ##------------------------------------------------------------------------------
-options(digits = 12, digits.secs = 6, width = 120,
-        datatable.verbose = FALSE, scipen = 8)
+options(digits = 8, digits.secs = 6, width　=　120,
+        datatable.verbose = FALSE, scipen = 10)
 ##------------------------------------------------------------------------------
-
+## =============================================================================
 
 ################################################################################
 ## MySQL
@@ -36,7 +35,7 @@ for( conns in dbListConnections(MySQL()) ){
 
 mysql_user <- 'fl'
 mysql_pwd  <- 'abc@123'
-mysql_host <- "192.168.1.183"
+mysql_host <- "127.0.0.1"
 mysql_port <- 3306
 
 #---------------------------------------------------
@@ -44,17 +43,15 @@ mysql_port <- 3306
 # 函数，主要输入为
 # database
 #---------------------------------------------------
-mysqlFetch <- function(dbName,
-                       user = mysql_user,
-                       pwd  = mysql_pwd,
+mysqlFetch <- function(db, 
                        host = mysql_host,
-                       port = mysql_port){
-  temp <- dbConnect(MySQL(),
-                    dbname   = as.character(dbName),
-                    user     = user,
-                    password = pwd,
-                    host     = mysql_host,
-                    port     = mysql_port
-                    )
+                       port = mysql_port,
+                       user = mysql_user,
+                       pwd  = mysql_pwd){
+  dbConnect(MySQL(),
+    dbname   = as.character(db),
+    host     = host,
+    port     = port,
+    user     = user,
+    password = pwd)
 }
-################################################################################

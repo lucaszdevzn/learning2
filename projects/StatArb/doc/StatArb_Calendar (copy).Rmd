@@ -1,0 +1,331 @@
+---
+title: "统计套利：StatArb"
+authoer: "William Fang"
+output:
+    html_notebook:
+        toc: TRUE
+---
+
+```{r global_options, include=FALSE}
+rm(list=ls()) ### To clear namespace
+library(knitr)
+opts_chunk$set(fig.width=20, fig.height=8, fig.align='center',
+               fig.cap=TRUE,fig.path='Figs/',
+               echo=TRUE, warning=FALSE, message=FALSE, results='markup')
+```
+
+--------------------------------------------------------------------------------
+```{r 基本设置, echo=FALSE}
+rm(list = ls())
+
+## =============================================================================
+## set working directory
+setwd('/home/william/Documents/myStrat/projects/StatArb')
+## =============================================================================
+
+## =============================================================================
+## load setup
+suppressWarnings({
+    source('./conf/myInit.R')
+})
+## =============================================================================
+```
+
+--------------------------------------------------------------------------------
+# 跨期套利
+
+## 想法
+
+### 均衡关系
+
+> 同一个期货品种（「product」）在不同月份交割便形成了合约（「contract」），即**近月合约**和**远月合约**存在天然的均衡关系。所谓*跨期套利*，是指利用同种商品两个不同期货合约间的价格差异进行套利的一种投资方式，属于**统计套利**的范畴。
+
+### 参数设置
+
+我选用了**铁矿**来做尝试，使用**分钟数据**。以下是一些相关的参数设置：
+
+```{r 参数设置}
+## 品种
+product <- 'i'
+
+## 近月合约与远月合约的月份差
+leadMonth <- 4
+
+## 参数估计使用的区间长度：分钟
+estimatedPeriod <- 100
+
+## 预测区间长度：分钟
+forecastPeriod <- 30
+```
+
+```{r echo=FALSE}
+forecastPeriod <- 60
+```
+
+
+## 代码演示
+
+### 获取数据
+
+```{r 获取数据, fig.align='center'}
+mysql <- mysqlFetch('china_futures_bar')
+
+query <- paste0("SELECT DISTINCT main_contract
+                FROM main_contract_daily
+                WHERE Product = ", "'", product,"'",
+                " AND TradingDay >= 20160701")
+temp <- dbGetQuery(mysql,query) %>% as.data.table() %>% .[-c(1:1)] # 去掉第一个
+temp
+
+productInfo <- data.table()
+for (i in 1:nrow(temp)) {
+    ## -------------------------------------------------------------------------
+    tempMain <- temp[i,main_contract]
+    tempSub <- gsub('[a-zA-Z]', '', tempMain) %>%
+               as.yearmon(.,'%y%m')  %>%
+               as.Date(.) %m+% months(leadMonth) %>%
+               as.character() %>%
+               gsub('-','',.) %>%
+               substr(.,3,6) %>%
+               paste0(product,.)
+    query <- paste0("select min(TradingDay), max(TradingDay)
+                    from main_contract_daily
+                    where main_contract = ", "'", tempMain, "'")
+    tempRes <- dbGetQuery(mysql, query)
+    ## -------------------------------------------------------------------------
+    productInfo <- rbind(productInfo,
+        data.table(tempRes[1,1], tempRes[1,2], tempMain, tempSub))
+}
+names(productInfo) <- c('beginDate', 'endDate', 'mainContract', 'subContract')
+# productInfo <- productInfo[-1]
+
+productInfo
+
+tempFields <- c('TradingDay', 'Minute', 'NumericExchTime',
+                'InstrumentID',
+                'OpenPrice as open',
+                'HighPrice as high',
+                'LowPrice as low',
+                'ClosePrice as close',
+                'Volume as volume', 'Turnover as turnover')
+
+dtMain <- lapply(1:nrow(productInfo), function(i){
+    query <- paste("select", paste(tempFields, collapse = ','),
+                   "from minute
+                    where TradingDay between",productInfo[i, gsub('-','',beginDate)],
+                    "and ",productInfo[i, gsub('-','',endDate)],
+                    "and InstrumentID =", productInfo[i,paste0("'",mainContract,"'")])
+    tempRes <- dbGetQuery(mysql,query) %>% as.data.table()
+}) %>% rbindlist()
+
+dtSub <- lapply(1:nrow(productInfo), function(i){
+    query <- paste("select", paste(tempFields, collapse = ','),
+                   "from minute
+                    where TradingDay between",productInfo[i, gsub('-','',beginDate)],
+                    "and ",productInfo[i, gsub('-','',endDate)],
+                    "and InstrumentID =", productInfo[i,paste0("'",subContract,"'")])
+    tempRes <- dbGetQuery(mysql,query) %>% as.data.table()
+}) %>% rbindlist()
+
+dt <- merge(dtSub, dtMain, by = c('TradingDay','Minute','NumericExchTime')) %>%
+        .[order(TradingDay, NumericExchTime, InstrumentID.x, InstrumentID.y)]
+```
+
+```{r 价格走势图, fig.cap='近月合约与远月合约的分钟 closePrice'}
+tempDT <- dt[,.(minuteIndex = 1:nrow(dt), close.x,close.y)]
+temp <- gather(tempDT,instrumentID,closePrice, -minuteIndex)
+ggplot(temp, aes(x = minuteIndex, y = closePrice, color = instrumentID)) +
+  geom_line() +
+  labs(title = '近月合约与远月合约的分钟 closePrice',
+       x = 'minuteIndex', y = 'closePrice',
+       caption = '@williamfang')
+```
+
+### inSample vs outSample
+
+```{r 样本内数据}
+dt_inSample <- dt[TradingDay < '2017-05-01']
+dt_outSample <- dt[TradingDay >= '2017-05-01']
+```
+
+### 预测收益率(response: `y`)
+
+```{r predictor, echo=T}
+dt_inSample[, ":="(
+  spdClose = close.y - close.x,    ## 以 close 为基差
+  spdHigh  = high.y - high.x       ## 以 high 为基差
+)]
+
+## 因为在合约交割的时候，会出现合约改变
+## 所以需要判断是不是同一个合约
+dt_inSample[, ":="(InstrumentXLag = shift(InstrumentID.x, forecastPeriod, type = 'lag'),
+                   InstrumentYLag = shift(InstrumentID.y, forecastPeriod, type = 'lag'))]
+dt_inSample <- dt_inSample[InstrumentID.x == InstrumentXLag & InstrumentID.y == InstrumentYLag]
+
+## 计算 lead 的价值
+dt_inSample[,":="(
+  spdCloseLead = shift(spdClose, forecastPeriod, type = 'lead'),
+  spdHighLead  = shift(spdHigh, forecastPeriod, type = 'lead')
+)]
+
+dt_inSample <- dt_inSample[!is.na(spdCloseLead) & !is.na(spdHighLead)]
+
+dt_inSample[,":="(
+  spdCloseRtn = (spdCloseLead - spdClose) / (close.x + close.y),
+  spdHighRtn  = (spdHighLead - spdHigh) / (high.x + close.y)
+)]
+```
+
+
+
+现在来看看:
+
+```{r echo=FALSE}
+p <- ggplot(dt_inSample, aes(x = 1:nrow(dt_inSample), y = spdCloseRtn)) +
+    geom_point(color = 'hotpink', alpha = 0.1, size = 0.5) +
+    labs(title = '预测的收益率：30分钟', x = 'minuteIndex', y = 'Return(%)',
+         caption = '@williamfang')
+ggplotly(p)
+```
+
+```{r}
+dt_inSample[, summary(spdCloseRtn)]
+t.test(dt_inSample$spdCloseRtn)
+```
+
+
+## 预测因子(predictor:`x`，以 `spdClose` 为例)
+
+
+```{r}
+################################################################################
+## function: calZScore
+## 计算 z-score 标准化
+################################################################################
+
+calZScore <- function(x) {
+## -----------------------------------------------------------------------------
+cl <- makeCluster(detectCores(), type = 'FORK')
+y <- parSapply(cl, 1:nrow(dt_inSample), function(i){
+    if (i <= estimatedPeriod) {
+        tempRes <- NA
+    } else {
+        temp <- dt_inSample[(i - estimatedPeriod) : (i)]
+        if (temp[1, InstrumentID.x] != temp[.N, InstrumentID.x] |
+           temp[1, InstrumentID.y] != temp[.N, InstrumentID.y] ) {
+            tempRes <- NA
+        } else {
+            tempRes <- (temp[.N, eval(as.symbol(x))] - temp[, mean(eval(as.symbol(x)))]) /
+                        temp[, sd(eval(as.symbol(x)))]
+        }
+    }
+    return(tempRes)
+})
+stopCluster(cl)
+## -----------------------------------------------------------------------------
+return(y)
+}
+
+dt_inSample[, spdCloseZ := calZScore('spdClose')]
+
+## spdCloseRank：做标准化：z-score
+## -----------------------------------------------------------------------------
+cl <- makeCluster(detectCores(), type = 'FORK')
+tempCloseRank <- parSapply(cl, 1:nrow(dt_inSample), function(i){
+    if (i <= estimatedPeriod) {
+        tempRes <- NA
+    } else {
+        temp <- dt_inSample[(i - estimatedPeriod) : (i)]
+        if (temp[1, InstrumentID.x] != temp[.N, InstrumentID.x] |
+           temp[1, InstrumentID.y] != temp[.N, InstrumentID.y] ) {
+            tempRes <- NA
+        } else {
+            tempRes <- base::rank(temp$spdClose, ties.method = 'max')[which(temp$spdClose == temp[.N, spdClose])][1]
+        }
+    }
+    return(tempRes)
+})
+stopCluster(cl)
+## -----------------------------------------------------------------------------
+dt_inSample[, spdCloseRank := tempCloseRank]
+
+## spdCloseRank：做标准化：z-score
+dt_inSample[, spdCloseRankZ := calZScore('spdCloseRank')]
+
+## 另一种标准化：deMean
+## -----------------------------------------------------------------------------
+cl <- makeCluster(detectCores(), type = 'FORK')
+tempCloseRankZM <- parSapply(cl, 1:nrow(dt_inSample), function(i){
+    if (i <= estimatedPeriod) {
+        tempRes <- NA
+    } else {
+        temp <- dt_inSample[(i - estimatedPeriod) : (i)]
+        if (temp[1, InstrumentID.x] != temp[.N, InstrumentID.x] |
+           temp[1, InstrumentID.y] != temp[.N, InstrumentID.y] ) {
+            tempRes <- NA
+        } else {
+            tempRes <- base::rank(temp$spdClose, ties.method = 'max')[which(temp$spdClose == temp[.N, spdClose])][1]
+            tempRes <- (tempRes - median((base::rank(temp$spdClose, ties.method = 'max')))) / nrow(temp)
+        }
+    }
+    return(tempRes)
+})
+stopCluster(cl)
+## -----------------------------------------------------------------------------
+dt_inSample[, spdCloseRankZM := tempCloseRankZM]
+```
+
+```{r echo=TRUE}
+dtRtn <- dt_inSample[!(is.na(spdCloseRtn) | is.na(spdCloseRank) |
+                       is.na(spdCloseRankZ) | is.na(spdCloseRankZM))]
+```
+
+
+
+### 价差绝对值因子：`spdCloseZ`
+
+```{r 绝对值因子, echo=TRUE}
+fit <- lm(data = dtRtn, spdCloseRtn ~ spdCloseZ + 0)
+summary(fit)
+```
+
+```{r}
+p <- ggplot(dtRtn) +
+    geom_line(aes(x = 1:nrow(dtRtn), y = spdCloseZ * 3.5 * fit$coefficients), color = 'orange', alpha = 0.8, size = 0.5) +
+    geom_line(aes(x = 1:nrow(dtRtn), y = spdCloseRtn), color = 'steelblue', alpha = 0.5, size = 0.6)
+print(p)
+```
+
+```{r}
+dtRtn[, rtn := -spdCloseRtn * sign(fit$coefficients)]
+dtRtn[, cumRtn := cumsum(rtn)]
+
+dtY <- dtRtn[spdCloseRtn %between% c(-0.006, 0.006)][!spdCloseRtn %between% c(-0.001, 0.001)]
+dtY[, rtn := -spdCloseRtn * sign(fit$coefficients)]
+dtY[, cumRtn := cumsum(rtn)]
+print(dtY)
+
+p <- ggplot(dtY, aes(1:nrow(dtY), y = cumRtn)) +
+    geom_line(color = 'steelblue', alpha = 0.5, size = 1.2)
+print(p)
+```
+
+```{r}
+tempDailyRtn <- dtY[, .(dailyRtn = .SD[,sum(rtn)]), by = 'TradingDay']
+sharpRatio <- tempDailyRtn[,mean(dailyRtn) / sd(dailyRtn) * sqrt(252)]
+print(sharpRatio)
+#dev.new()
+tempDailyRtn$TradingDay <- ymd(tempDailyRtn$TradingDay)
+ggplot(tempDailyRtn, aes(x = TradingDay, y = dailyRtn)) + geom_line(color = 'steelblue')
+```
+
+
+### 价差相对排名因子：`spdCloseRankZ`
+
+```{r 排名, echo=TRUE, message=TRUE}
+fit <- lm(data = dtRtn, spdCloseRtn ~ spdCloseRankZ + 0)
+print(summary(fit))
+
+fit <- lm(data = dtRtn, spdCloseRtn ~ spdCloseRankZM + 0)
+print(summary(fit))
+```

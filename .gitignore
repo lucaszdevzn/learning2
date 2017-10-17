@@ -9,14 +9,11 @@
 
 
 # 不想要同步的文件夹
-/vnpy1.6.1/vn.data/TickData/*
 *.temp
-*.vt
-*.dat
-*.bak
 *.dir
 *.local
 
 *.csv
+*.fst
 
 *.research

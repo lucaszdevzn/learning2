@@ -1,44 +1,137 @@
 ---
-title: “Stat Arb：统计套利”
+title: "统计套利：StatArb"
 author: "William Fang"
-date: "`r Sys.Date()`"
 output:
-  tufte::tufte_html: default
-  tufte::tufte_book:
-    citation_package: natbib
-    latex_engine: xelatex
-  tufte::tufte_handout:
-    citation_package: natbib
-    latex_engine: xelatex
-biblio-title: 参考文献
-bibliography: skeleton.bib
-link-citations: yes
+    html_document:
+        toc: TRUE
+        toc_depth: 4
 ---
 
---------------------------------------------------------------------------------
-```{r setup, include=FALSE}
-library(tufte)
-# tufte版本变化之后更新knitr缓存
-knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
-options(htmltools.dir.version = FALSE)
+```{r global_options, include=FALSE}
+rm(list=ls()) ### To clear namespace
+library(knitr)
+opts_chunk$set(fig.width = 15, fig.height = 8, fig.align = 'center',
+               fig.cap = TRUE, fig.path = 'Figs/',
+               echo = TRUE, warning = FALSE, message = FALSE, 
+               results = 'markup')
+```
+
+# 想法
+
+> 同一个期货品种（「product」）在不同月份交割便形成了合约（「contract」），即**近月合约**和**远月合约**存在天然的均衡关系。所谓*跨期套利*，是指利用同种商品两个不同期货合约间的价格差异进行套利的一种投资方式，属于**统计套利**的范畴。
+
+
+# 代码
+
+
+## 项目结构
+```{bash eval=T}
+cd /home/william/Documents/myStrat/projects/StatArb/R
+tree -L 2
+```
+
+## 主函数：`main.R`
+
+```{r eval=TRUE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/main.R'))
+```
+
+## 代码分析
+
+### 参数设置
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# rm(list = ls())
+
+## =============================================================================
+## set working directory
+setwd('/home/william/Documents/myStrat/projects/StatArb')
+## =============================================================================
+
+## =============================================================================
+## load setup
+suppressWarnings({
+    source('./conf/myInit.R')
+})
+## =============================================================================
+
+## =============================================================================
+## 01:
+##   - fetch data form MySQL
+##   - manipulate data
+##
+## output:
+##   - dt
+##   - inSample
+##   - dtY
+## =============================================================================
+source('./R/StatArb_Calendar_01_fetch_data.R')
+
+
+## =============================================================================
+## 02:
+##   - calculate response
+## =============================================================================
+source('./R/StatArb_Calendar_02_response.R')
+```
+
+### 因子分析
+
+#### `spdClose`
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_01.R'))
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_01.R')
+
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_04_rtn.R')
 ```
 
 
-# 跨期套利
+#### `spdCloseRank`
 
-## Idea
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_02.R'))
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_02.R')
 
-## Pseudo
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_04_rtn.R')
+```
 
-## Results
 
---------------------------------------------------------------------------------
+#### `spdTurnoverChgPct`
 
-# 跨品种
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_03.R'))
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_03.R')
 
-## Idea
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_04_rtn.R')
+```
 
-## Pseudo
 
-## Results
+#### `cor(spdCloseZ, spdTurnoverChgPctZ)`
 
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_04.R'))
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_04.R')
+
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_04_rtn.R')
+```
+
+
+#### `cor(highChgPct.x, highChgPct.y)`
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_05.R'))
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_05.R')
+
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_04_rtn.R')
+```
+
+
+#### `|high - low|`
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+print(readLines('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_06.R'))
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_03_predictor_06.R')
+
+source('/home/william/Documents/myStrat/projects/StatArb/R/StatArb_Calendar_04_rtn.R')
+```

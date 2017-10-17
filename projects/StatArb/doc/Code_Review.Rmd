@@ -1,0 +1,75 @@
+---
+title: "统计套利"
+author: 'William Fang'
+output:
+  tufte::tufte_html: 
+      highlight: zenburn
+      toc: true
+link-citations: yes
+---
+
+```{r global_options, include=FALSE}
+rm(list=ls()) ### To clear namespace
+library(knitr)
+opts_chunk$set(fig.width = 15, fig.height = 8, fig.align = 'center',
+               fig.cap = TRUE, fig.path = 'Figs/',
+               echo = TRUE, warning = FALSE, message = FALSE, 
+               results = 'markup')
+# tufte版本变化之后更新knitr缓存
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+```
+
+
+# `2017-07-03`
+
+## 汇报
+
+统计套利之跨期套利在铁矿 `i` 的**近月合约**与**远月合约**之间的收益率预测模型。统计套利之跨期套利在铁矿 `i` 的**近月合约**与**远月合约**之间的收益率预测模型统计套利之跨期套利在铁矿 `i` 的**近月合约**与**远月合约**之间的收益率预测模型^[下一步继续研究其他品种之间的跨期统计套利]
+
+## 反馈
+
+1. 目前发现 `spdClose` 具有相对较好的预测能力，是一个**反转因子**
+2. 需要平衡样本内数量和样本外数据量，我使用 `100` 个点的样本外数据，来预测 `30` 个点的样本外数据，其实可以再多加几个参数试试看，比如，`90`、`60`、`30`
+3. `2016-11-11` 这一天的 `i` 主力合约有些异常，忽略排除是因为当天该合约涨停
+4. 再找找其他的信息是否有用，尤其是趋势因子，比如 `high`、`low`、`volume`、`turnover`
+5. 试试看做 `daily` 的统计套利是不是也有类似的预测能力
+
+## 思考
+
+### `2016-11-11` 当天的数据问题
+
+```{r}
+rm(list = ls())
+
+## =============================================================================
+## set working directory
+setwd('/home/william/Documents/myStrat/projects/StatArb')
+## =============================================================================
+
+## =============================================================================
+## load setup
+suppressWarnings({
+    source('./conf/myInit.R')
+})
+## =============================================================================
+```
+
+```{r fig.cap='2016-11-11 当天 i1701 的走势图。 从数据上看，当天的收盘价已经触摸到了涨停价格，因此尾盘实际上是涨停状态。这种情况做套利无法实现，所以在原来的数据需要进行排除。'}
+mysql <- mysqlFetch('china_futures_bar', host = '192.168.1.106')
+minuteData <- dbGetQuery(mysql,
+                         "select *
+                         from minute 
+                         where InstrumentID = 'i1701'
+                         and tradingDay = 20161111  
+                         ") %>% as.data.table() %>% 
+              .[order(NumericExchTime)]
+plot(minuteData$ClosePrice, type = 'l', col = 'blue')
+```
+
+### 参数敏感性分析
+
+
+
+
+
